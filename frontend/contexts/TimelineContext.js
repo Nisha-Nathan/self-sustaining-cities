@@ -15,7 +15,7 @@ export class Interval {
     toString() {
         return `${this.start} - ${this.end}`;
     }
-};
+}
 
 export const TimelineContext = React.createContext({
     // represents the min and max year the timeline can be

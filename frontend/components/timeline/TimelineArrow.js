@@ -162,7 +162,7 @@ export function TimelineArrow({isLeft}) {
             </p>
         </button>
     );
-};
+}
 
 TimelineArrow.propTypes = {
     isLeft: PropTypes.bool.isRequired

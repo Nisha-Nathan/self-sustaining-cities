@@ -1,11 +1,16 @@
 import React from "react";
 import PropTypes from "prop-types";
-import {MapContainer, Marker, Popup, TileLayer} from "react-leaflet";
+import {MapContainer, GeoJSON, Marker, Popup, TileLayer} from "react-leaflet";
 import Input from "@material-ui/core/Input";
 import Typography from "@material-ui/core/Typography";
 import Grid from "@material-ui/core/Grid";
 import Slider from "@material-ui/core/Slider";
 import Dropdown from "react-bootstrap/Dropdown";
+import L from "leaflet";
+// import Choropleth from "react-leaflet-choropleth";
+import {features} from "./geojson";
+import {white} from "material-ui/styles/colors";
+
 // AFTERNOON TEAM
 
 
@@ -15,6 +20,40 @@ const MAIN_LOCATION = {
     date: "Test date",
     info: "Test info"
 };
+
+/*const style = {
+    fillColor: "#F28F3B",
+    weight: 2,
+    opacity: 1,
+    color: "white",
+    dashArray: "3",
+    fillOpacity: 0.5
+};*/
+
+const mapPolygonColorToDensity = (density => {
+    return density > 30000
+        ? "#a50f15"
+        : density > 25000
+            ? "#de2d26"
+            : density > 20000
+                ? "#fb6a4a"
+                : density > 15000
+                    ? "#fc9272"
+                    : density > 10000
+                        ? "#fcbba1"
+                        : "#ffdccc";
+});
+
+const style = (feature => {
+    return ({
+        fillColor: mapPolygonColorToDensity(feature.properties.density),
+        weight: 1,
+        opacity: 1,
+        color: "white",
+        dashArray: "2",
+        fillOpacity: 0.5
+    });
+});
 
 function sliderInput(value, bound, defaultRange, inputChangeFunc, sliderBlurFunc) {
     const [minValue, maxValue] = defaultRange;
@@ -80,6 +119,47 @@ function timeSlider(
         </div>
     );
 }
+
+
+// Dropdown options
+// On select event change state
+function renderFilter(dataChangeFunc) {
+    return (
+        <select onChange={dataChangeFunc}>
+            <option disabled={true}>Filter</option>
+            <option value="addresses">Addresses</option>
+            <option value="church">Church</option>
+            <option value="school">School</option>
+            <option value="population">Population density</option>
+        </select>
+    );
+}
+
+function renderLegend() {
+    return (
+        <div>
+            <h5>Legend</h5>
+            <ul>
+                <li><span style={{background: "#a50f15", padding: "0 5px", margin: "0 4px 0 0"}}/> -
+                    From 30,000
+                </li>
+                <li><span style={{background: "#de2d26", padding: "0 5px", margin: "0 4px 0 0"}}/> -
+                    From 25,000
+                </li>
+                <li><span style={{background: "#fb6a4a", padding: "0 5px", margin: "0 4px 0 0"}}/> -
+                    From 20,000
+                </li>
+                <li><span style={{background: "#fc9272", padding: "0 5px", margin: "0 4px 0 0"}}/> -
+                    From 10,000
+                </li>
+                <li><span style={{background: "#fcbba1", padding: "0 5px", margin: "0 4px 0 0"}}/> -
+                    Less than 10,000
+                </li>
+            </ul>
+        </div>
+    );
+}
+
 
 export class TimeControl extends React.Component {
     // Modify these to change the step of each increment
@@ -171,6 +251,25 @@ TimeControl.propTypes = {
     defaultTime: PropTypes.array
 };
 
+const blueIcon = new L.Icon({
+    iconUrl:
+        "https://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|abcdef&chf=a,s,ee00FFFF",
+    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
+const greenIcon = new L.Icon({
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+});
+
 export class MapDropdown extends React.Component {
     constructor(props) {
         super(props);
@@ -255,12 +354,16 @@ MapDropdown.propTypes = {
 };
 
 export default class MapMicro extends React.Component {
+    //  Create the Icon
     constructor(props) {
         super(props);
 
         this.state = {
             mainLocation: MAIN_LOCATION,
             markerData: [],
+            geojson: {},
+            isPopulation: false,
+            mapInfo: "population",
             sliderState: [1900, 2022],
             timeRange: [1900, 2022],
             lastValid: [1900, 2022],
@@ -269,17 +372,44 @@ export default class MapMicro extends React.Component {
     }
 
     componentDidMount() {
+        this.getAddress();
+        this.getPopulation();
+    };
+
+    getAddress() {
         fetch("/api/get_address_data/")
             .then(response => {
                 return response.json();
             })
             .then(data => {
                 this.setState({
-                    markerData: [...this.state.markerData, ...data["address_data"]]
+                    markerData: [...this.state.markerData, ...data["address_data"]],
+                    isPopulation: false
                 });
             });
-    };
+    }
 
+    getPopulation() {
+        // fetch(
+        //     "https://raw.githack.com/datafaust/raw/main/cruise-prototype/hh_2020112300_2020120623_Saturday_02.geojson"
+        // )
+        //     .then((response) => response.json())
+        //     .then((geojson) => {
+        //         console.log("Getting GeoJson data");
+        //         console.log(geojson);
+        //         this.setState({geojson, loaded: 2});
+        //     });
+        const _features = features.map((feature) => {
+            feature.properties.density = Math.floor(Math.random() * 40000);
+            return feature;
+        });
+
+        console.log("Features", _features);
+
+        this.setState({
+            geojson: _features
+        });
+    }
 
     setSliderValue = (newLowerBound, newUpperBound) => {
         this.setState({
@@ -291,6 +421,50 @@ export default class MapMicro extends React.Component {
     handleSliderChange = (event, value) => {
         const [newLowerBound, newUpperBound] = value;
         this.setSliderValue(newLowerBound, newUpperBound);
+    }
+
+    handleChangeData = (event) => {
+        switch (event.target.value) {
+        case "addresses":
+            this.setState({
+                isPopulation: false
+            });
+            this.getAddress();
+            break;
+        case "church":
+            const churchAddr = {
+                address: "Church Address",
+                year: 2000,
+                coordinates: ["38.9074322", "-77.0350922"],
+                icon: greenIcon
+            };
+            this.setState({
+                markerData: [churchAddr],
+                isPopulation: false
+            });
+            break;
+        case "school":
+            const schoolAddr = {
+                address: "Church Address",
+                year: 2000,
+                coordinates: ["38.8856607", "-77.03272853070882"],
+                icon: blueIcon
+            };
+            this.setState({
+                markerData: [schoolAddr],
+                isPopulation: false
+            });
+            break;
+        case "population":
+            this.setState({
+                isPopulation: true
+            });
+
+            this.getPopulation();
+            break;
+        default:
+            this.getAddress();
+        }
     }
 
     handleSliderInputChange = (event, bound) => {
@@ -351,13 +525,19 @@ export default class MapMicro extends React.Component {
             (!location.year)
         ));
 
+
         const markerObjects = validAddresses.map((location, i) => (
-            <Marker key={i} position={location.coordinates}>
+            <Marker key={i} position={location.coordinates}
+                icon={location.icon ? location.icon : blueIcon}>
                 <Popup>
                     {location.address}
                 </Popup>
             </Marker>
         ));
+
+        const cholo = this.state.geojson && (
+            <GeoJSON data={this.state.geojson} style={style}/>
+        );
 
         return (<>
             <h1>{this.state.mainLocation.name}</h1>
@@ -375,8 +555,32 @@ export default class MapMicro extends React.Component {
                             attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors"
                             url="http://stamen-tiles-a.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png"
                         />
-                        {markerObjects}
+
+                        {this.state.isPopulation ? cholo : markerObjects}
+
+                        {this.state.isPopulation && (
+                            <div style={{
+                                marginTop: "17.5rem", marginLeft: "150px",
+                                position: "absolute", zIndex: 1000,
+                                background: white,
+                                padding: "8px",
+                                bottom: "8px"
+                            }}>
+                                {renderLegend()}
+                            </div>
+                        )}
+
+
+                        <div style={{
+                            marginTop: "17.5rem", marginLeft: "0.75rem",
+                            position: "absolute", zIndex: 1000
+                        }}>
+                            {renderFilter(this.handleChangeData)}
+                        </div>
+
+
                     </MapContainer>
+
                     {timeSlider(
                         "Time Slider",
                         this.state.sliderState,

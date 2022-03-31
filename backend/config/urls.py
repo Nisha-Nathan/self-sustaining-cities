@@ -19,9 +19,11 @@ from django.urls import path, re_path
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework.urlpatterns import format_suffix_patterns
+import sys
+sys.path.append("..")
 
 try:
-    from ..app import views
+    from app import views
 except (ImportError, ModuleNotFoundError):
     from app import views
 
